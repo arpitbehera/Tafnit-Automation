@@ -1,0 +1,29 @@
+# Personal configuration and credentials
+*.local.json
+local_config.py
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+# Quotes and generated order artifacts
+*.pdf
+*.csv
+*.xlsx
+*.log
+*.zip
+*-tafnit/
+state.json
+review.json
+*.png
+!RoshElectroptics/templates/*.png
+# Environments and caches
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,18 @@
+[project]
+name = "tafnit-automation"
+version = "0.1.0"
+description = "Prepare Tafnit purchase requisitions from Rosh Electroptics Thorlabs quotations"
+requires-python = ">=3.11"
+dependencies = [
+    "pypdf>=6,<7",
+    "pyautogui>=0.9.54,<1; sys_platform == 'win32'",
+    "pyperclip>=1.9,<2; sys_platform == 'win32'",
+    "Pillow>=11,<13; sys_platform == 'win32'",
+    "opencv-python>=4.12,<5; sys_platform == 'win32'",
+    "numpy>=2,<3; sys_platform == 'win32'",
+    "plyer>=2.1,<3; sys_platform == 'win32'",
+    "pynput>=1.8,<2; sys_platform == 'win32'",
+]
+
+[tool.uv]
+package = false
