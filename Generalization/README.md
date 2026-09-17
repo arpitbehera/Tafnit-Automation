@@ -9,7 +9,9 @@ enters the items and checks the saved request against the reviewed data.
 **Final approval is always yours.** By default the script never clicks the
 submission button. `--open-final-confirmation` can open the final dialog after
 verification, but cannot approve it. That option requires mappings for net,
-tax and gross totals. The original Rosh script remains available unchanged.
+tax and gross totals. The Rosh script remains available with its own supplier
+logic and automatic final-dialog handoff; both entry points share home-screen
+startup and low-level desktop helpers.
 
 ## Why there is a reviewed data format
 
@@ -18,8 +20,8 @@ understand every PDF is not reliable. Layouts, currencies, taxes, freight,
 discounts, units and scanned pages vary. This implementation separates:
 
 1. **Extraction:** the existing validated Rosh/Thorlabs parser handles its known
-   quotation format. Other PDFs produce local extracted text and editable
-   JSON/CSV templates, then stop without touching Tafnit.
+   quotation format. Readable PDFs with unsupported layouts produce local
+   extracted text and editable JSON/CSV templates, then stop without touching Tafnit.
 2. **Review:** supply the vendor-independent [quotation format](FORMAT.md),
    compare it with the PDF, and validate exact amounts locally.
 3. **Entry:** the script prompts for supplier details, verifies Tafnit's resolved
@@ -41,8 +43,9 @@ From the repository root in PowerShell:
 
 ```powershell
 uv sync --locked
-# Run this copy only if you have not already created your local profile.
-Copy-Item Generalization/config.example.json Generalization/config.local.json
+if (!(Test-Path Generalization/config.local.json)) {
+    Copy-Item Generalization/config.example.json Generalization/config.local.json
+}
 notepad Generalization/config.local.json
 ```
 
@@ -75,9 +78,17 @@ quotation-general-tafnit/
   items.template.csv               Item column headers
 ```
 
+The directory is beside the PDF. Unreadable/encrypted PDFs can fail extraction
+with exit `1` before templates are created. Use a readable local copy or prepare
+reviewed `--data` yourself; with `--data`, the PDF is attached without automatic
+quotation extraction.
+
 Fill the JSON including its `items`, or keep `items: []` and fill the CSV.
 Templates are never overwritten on later attempts. Do not put guessed values
 in a missing field merely to pass validation. Consult the PDF/vendor instead.
+For example, copy `quotation.template.local.json` to
+`D:\Orders\quotation.local.json`, and, if using CSV, copy `items.template.csv`
+to `D:\Orders\items.csv`. Fill those copies before running the examples below.
 
 ```powershell
 # JSON with embedded items
@@ -93,12 +104,22 @@ uv run Generalization/tafnit.py "D:\Orders\quotation.pdf" --data "D:\Orders\quot
 Dry-run writes `quotation.review.local.json` and `items.review.csv`, but no
 checkpoint, supplier prompt or desktop operation. It requires a PDF or `--data`
 path; it never opens a picker. Without an explicit `--config`, it validates the
-quotation only. It does not prove the PDF and JSON describe the same goods;
+quotation only, even when `Generalization/config.local.json` already exists.
+It does not prove the PDF and JSON describe the same goods;
 compare them yourself. Input files cannot occupy generated output paths.
+`--dry-run` cannot be combined with `--resume` or `--open-final-confirmation`.
 
 ## Enter a draft
 
-Open one **new blank** purchase request with the configured institution defaults.
+Log in to Tafnit in Chrome and leave its **home screen** as the active tab on
+display 1. Keep one eligible Tafnit home window or one purchase-request window;
+multiple purchase-request windows stop startup.
+The script follows **עברית → יזם → עברית → קליטה** and opens the exact
+**דרישה לרכש** (Purchase Request) menu option. Allow Tafnit popups in Chrome.
+An already-open **new blank** purchase request is also supported and takes
+precedence over the home screen. The form must have the configured institution
+defaults. See [browser setup](../RoshElectroptics/ROSH_THORLAB_TAFNIT.md#browser-setup)
+for menu, display and DevTools requirements.
 Run the same command without `--dry-run`:
 
 ```powershell
@@ -116,7 +137,9 @@ The script asks for:
   available; the script stops before saving a row with no website.
 
 It shows every item, amount, funding note and relevant profile choices. Type
-the word `ENTER` to start. Any other response cancels before desktop entry.
+the word `ENTER` to start, rather than just pressing the Enter key. Any other
+response cancels before desktop entry. A five-second countdown follows your
+confirmation. Resume also shows the review and requires typing `ENTER` again.
 Supplier lookup must resolve to the entered name/code/agent before item entry.
 Unknown vendors are not registered automatically.
 
@@ -144,8 +167,13 @@ If tax/gross readback is not mapped for a zero-tax quote, those totals are
 explicitly marked **UNVERIFIED** in the terminal and checkpoint; inspect them
 manually. Nonzero quoted tax requires both readback mappings before entry.
 
-If you have verified all total-field mappings and want the script to open the
-final research-use dialog after its checks:
+On normal completion, the terminal reports `Saved draft <number>`. Review that
+request in Tafnit and finish it manually, or use the
+[saved-draft resume command](#recovery-and-limits) if the original profile
+already includes all total-field mappings.
+
+For a **new run**, if you have verified all total-field mappings and want the
+script to open the final research-use dialog after its checks:
 
 ```powershell
 uv run Generalization/tafnit.py "D:\Orders\quotation.pdf" --data "D:\Orders\quotation.local.json" --open-final-confirmation
@@ -161,7 +189,12 @@ behavior still requires a separate final confirmation.
 ## Recovery and limits
 
 Move the pointer to a screen corner or press Ctrl+C to stop. A partial draft
-may remain; there is no rollback. Inspect Tafnit before running again:
+may remain; there is no rollback. Inspect Tafnit before running again.
+
+Keep or reopen the **same request** before `--resume`. Resume never opens a new
+request from the home screen, including after a startup interruption. If no form
+was opened before the interruption, manually open **דרישה לרכש** and inspect
+its blank form before resuming.
 
 ```powershell
 uv run Generalization/tafnit.py "D:\Orders\quotation.pdf" --data "D:\Orders\quotation.local.json" --resume
@@ -175,7 +208,14 @@ saved rows or an unrelated attachment blocks data entry. A row accepted just
 before an interruption is recognized from the live table and is not duplicated.
 
 A saved draft can be resumed with `--open-final-confirmation` if its original
-profile already included all total mappings. Once the final handoff is recorded,
+profile already included all total mappings:
+
+```powershell
+uv run Generalization/tafnit.py "D:\Orders\quotation.pdf" --data "D:\Orders\quotation.local.json" --resume --open-final-confirmation
+```
+
+Also repeat any original `--items-csv`, `--config` and `--state-dir` arguments.
+Once the final handoff is recorded,
 resume is blocked even if the click failed. Finish manually; do not delete the
 checkpoint to bypass it. If you intentionally change the data/profile mid-run,
 finish or correct the existing draft manually rather than starting a duplicate.
@@ -202,17 +242,43 @@ not the downloaded document's bytes; do not replace it between runs.
 Offline tests cover parsing, validation, simulated entry and recovery. An assisted
 live draft verified the foreign-USD field mappings and catalog-remarks approach.
 The updated automated catalog path has offline regression coverage, but has not
-yet completed an unattended live run. No institution-wide vendor registry or
-procurement policy is assumed. Check the first saved draft carefully, including
+yet completed an unattended live run. Home-screen startup is tested with
+simulated windows/DOM and has not been verified against a live logged-in home
+screen. No institution-wide vendor registry or procurement policy is assumed.
+Check the first saved draft carefully, including
 catalog-selected items and totals.
 
 ## Options, files and privacy
 
-`--config PATH` selects another profile; `--state-dir PATH` selects the artifact
-directory. Omit the PDF for a file picker during entry. Both direct script and
-`uv run python -m Generalization.tafnit` invocation work. Exit codes: `0` for
-success/cancellation, `1` for a validation/entry stop, `2` for review templates
-or command-line usage errors. `--help` lists all options.
+| Argument | Behavior |
+| --- | --- |
+| `pdf` | PDF attachment path. Live entry always needs a PDF; omitting the path opens a file picker even when `--data` is supplied. Cancelling exits. |
+| `--data PATH` | Reviewed quotation JSON. Without it, try the known Rosh PDF parser and emit review templates if the layout is unsupported. |
+| `--items-csv PATH` | Reviewed item CSV; requires `--data` whose `items` array is empty. |
+| `--dry-run` | Validate/export locally; requires an explicit PDF or `--data`. No picker, supplier prompt, checkpoint creation or desktop entry. Cannot be combined with resume or final-confirmation flags. |
+| `--config PATH` | Generalized profile. Live entry defaults to `Generalization/config.local.json` beside the script. Dry-run checks a profile only when this flag is explicit. |
+| `--state-dir PATH` | Output/checkpoint directory; see defaults below. Repeat this argument on resume. |
+| `--resume` | Use the existing checkpoint, stored supplier and original open request; recheck input/profile and ask for `ENTER` again. |
+| `--open-final-confirmation` | After verifying the saved draft, request the final dialog and stop. Requires all total mappings; it never approves the dialog. |
+| `--help` | Print usage and exit. |
+
+By default, artifacts go to `<PDF-stem>-general-tafnit` beside the PDF. A
+data-only dry run uses `<JSON-stem>-general-tafnit` beside its JSON input.
+`--state-dir` overrides both. A successful dry run writes
+`quotation.review.local.json` and `items.review.csv`; accepted live entry also
+creates `state.json` before desktop startup and screenshots as the run proceeds.
+Review exports can be replaced on subsequent runs; extraction templates are
+preserved. A stopped startup can have a checkpoint without a saved request.
+Check [recovery](../docs/TROUBLESHOOTING.md) before choosing whether to resume.
+
+Do not use a generated review file as input at the same output location: copy
+it elsewhere first, keeping the original `--state-dir` if resuming. The script
+rejects collisions to protect source inputs from being overwritten.
+
+Both direct script and `uv run python -m Generalization.tafnit` invocation work
+from the repository root. Exit codes: `0` for success/cancellation, `1` for a
+handled validation/entry stop, `2` for review templates or command-line usage
+errors. Run `uv run Generalization/tafnit.py --help` for the current option list.
 
 Keep quotations, profiles, CSVs, checkpoints and screenshots private. Use
 `*.local.json` for reviewed input inside the repository; it is ignored. The

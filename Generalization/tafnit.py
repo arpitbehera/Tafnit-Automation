@@ -2,6 +2,7 @@
 
 Unknown PDF layouts need reviewed --data JSON, optionally with --items-csv.
 Supplier details are prompted for live entry. Final approval is always manual.
+Live entry starts at the logged-in Tafnit home screen or a blank purchase request.
 See Generalization/README.md for setup, supported mappings and recovery.
 """
 from __future__ import annotations
@@ -19,7 +20,7 @@ from typing import Callable
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from RoshElectroptics.rosh_thorlabs_tafnit import AutomationError, Checkpoint
+from RoshElectroptics.rosh_thorlabs_tafnit import AutomationError, Checkpoint, PURCHASE_REQUEST_LABEL
 from Generalization.configuration import ConfigurationError, Supplier, load_config, prompt_supplier, unverified_totals, validate_mapping
 from Generalization.desktop import GeneralDesktop
 from Generalization.quotation import (
@@ -185,9 +186,11 @@ def main(argv: list[str] | None = None, *, ask: Callable[[str], str] | None = No
                          input_sha256=fingerprint(quote, config, supplier))
         write_json(directory / "quotation.review.local.json", quote.to_dict())
         export_csv(quote, directory / "items.review.csv")
+        print("Keep the original purchase request open in Chrome on display 1." if args.resume
+              else f"Keep Tafnit's home screen or a blank purchase request open in Chrome on display 1. The script opens '{PURCHASE_REQUEST_LABEL}' when needed.")
         print("Starting in 5 seconds. Leave mouse/keyboard alone; a screen corner or Ctrl+C stops automation.")
         time.sleep(5)
-        ui = GeneralDesktop(directory, config, supplier, quote)
+        ui = GeneralDesktop(directory, config, supplier, quote, allow_open_request=not args.resume)
         run_entry(ui, quote, pdf, state, config, open_final_confirmation=args.open_final_confirmation)
         print("STOPPED after requesting final confirmation. Inspect Tafnit's confirmation or validation message; no final approval was clicked." if args.open_final_confirmation
               else f"Saved draft {state.data['request']}. Review and complete it manually in Tafnit.")

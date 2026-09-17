@@ -84,10 +84,11 @@ def verify_rows(q: Quotation, rows: list[list[str]], config: Config, *, complete
 
 
 class GeneralDesktop(TafnitDesktop):
-    def __init__(self, artifacts: Path, config: Config, supplier: Supplier, quote: Quotation):
+    def __init__(self, artifacts: Path, config: Config, supplier: Supplier, quote: Quotation,
+                 *, allow_open_request: bool = True):
         self.supplier = supplier
         self.quote = quote
-        super().__init__(artifacts, config)
+        super().__init__(artifacts, config, allow_open_request=allow_open_request)
 
     def _verify_fields(self, expected: dict[str, str]) -> None:
         fields = json.dumps(list(expected))

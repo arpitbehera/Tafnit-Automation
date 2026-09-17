@@ -1,10 +1,15 @@
-# General Tafnit Implementation Plan
+# General Tafnit implementation status
+
+This is the completed implementation record, including subsequent extensions.
+For operating instructions, use [README.md](README.md); for current module
+responsibilities and constraints, see [DESIGN.md](DESIGN.md).
 
 **Goal:** Prepare vendor-independent requisitions from locally reviewed quotes.
 
 **Architecture:** Separate local extraction/normalization, explicit form
 configuration, desktop entry, and CLI orchestration. Reuse low-level Rosh GUI
-helpers without changing the original workflow.
+helpers and home-screen startup while retaining separate supplier-specific
+and generalized entry workflows.
 
 **Tech stack:** Python 3.11+, stdlib, existing pypdf and Windows GUI dependencies.
 
@@ -45,3 +50,15 @@ helpers without changing the original workflow.
    Files: `README.md`, `FORMAT.md`, root README and relevant docs/ignore rules.
    Run all offline tests, both CLI invocation styles, example validation,
    whitespace checks and a focused review of the final handoff paths.
+6. [x] Add reviewed websites, legacy-safe descriptions and catalog-line remarks.
+   Preserve reviewed variant details for locked catalog descriptions; verify
+   saved identity/remarks after page saves and on resume. Map the observed USD
+   net, tax and gross fields explicitly. Tests: `test_generalization_fixes.py`
+   and `test_generalization_catalog.py` under the repository's `tests/`.
+7. [x] Add shared startup from the logged-in Tafnit home screen.
+   Follow `kalirkosh.py`'s Hebrew menu sequence using four bundled crops, require
+   the exact **דרישה לרכש** label, and accept only its new blank form. Support
+   popup and same-window navigation; never open a replacement during resume.
+   Files: shared `TafnitDesktop`, both entry points, `desktop.py`, templates,
+   and `tests/test_tafnit_startup.py`. Verification is offline; live home-screen
+   validation remains outstanding.

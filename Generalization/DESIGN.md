@@ -2,7 +2,8 @@
 
 The reliable generalization is a validated interchange format, not a universal
 PDF parser. All processing stays local. Known Rosh/Thorlabs quotations reuse the
-existing parser; other PDFs produce text and editable JSON/CSV templates. A
+existing parser; successfully extracted but unsupported PDFs produce text and
+editable JSON/CSV templates. Extraction errors stop before template creation. A
 reviewed JSON document (optionally with a separate item CSV) represents any
 vendor without claiming that arbitrary document layouts can be parsed safely.
 
@@ -11,11 +12,22 @@ checkpointing and entry. `quotation.py` owns the interchange format, Decimal
 validation and CSV/PDF conversion. `desktop.py` reuses the existing low-level
 desktop helpers and implements vendor-independent fields and verification.
 `configuration.py` owns institution settings and explicit Tafnit mappings.
-The original Rosh workflow remains unchanged.
+`workflow.py` owns checkpoint stages, existing-row checks, saving, customs,
+total verification and the optional final handoff. The Rosh entry point retains
+its supplier-specific workflow and shares startup and low-level UI helpers.
+
+`GeneralDesktop` inherits home-screen startup from `TafnitDesktop`. A new run
+can attach to an already-open blank request or follow the bundled `kalirkosh.py`
+menu sequence **עברית → יזם → עברית → קליטה**. The final control must match
+**דרישה לרכש** exactly. It is clicked once; the popup or same-window form must
+have the expected title, configured hostname, blank request number and New
+status before entry. Missing/ambiguous controls and timeouts stop automation.
+Resume passes `allow_open_request=False` and requires the original form, even
+when the preceding run stopped during startup. Login remains manual.
 
 The operator supplies the registered supplier code, exact name displayed by
-Tafnit, optional agent code, and optional supplier website fallback. The resolved supplier name and codes must
-match before items are entered. Vendor registration is verified by Tafnit's
+Tafnit, optional agent code, and optional supplier website fallback. The resolved
+supplier name and codes must match before items are entered. Vendor registration is verified by Tafnit's
 lookup, not a separate registry or an invented identifier. Institution settings
 and layout mappings live in ignored local configuration.
 
@@ -36,7 +48,9 @@ before browser entry. Changed layouts require adapting and validating the
 adapter. The supplied foreign-USD profile uses the observed form's totals and
 table labels; other mappings require local form verification.
 
-Dry-run never initializes desktop automation. Live entry requires a quotation
+Dry-run never initializes desktop automation or opens a picker. It validates
+the profile only when `--config` is explicit; live entry uses the profile beside
+the script by default. Live entry requires an attachment PDF, a quotation
 review and typed confirmation, saves a draft, verifies rows/header/attachments/
 totals, then stops. Opening the final research-use dialog is an explicit option;
 it records an irreversible handoff in the checkpoint first. There is no final
@@ -44,9 +58,10 @@ approval action. Resume checks the PDF and the complete reviewed input/profile/
 vendor fingerprint before touching the desktop and verifies existing rows.
 
 The final checkpoint records a handoff attempt, not proof of submission or of
-an open dialog. Tafnit may show validation instead. Source descriptions stay
-unchanged; entry/readback use the same legacy-safe sign replacements as the
-Rosh flow. Catalogued rows retain and verify the reviewed description as well as
+an open dialog. Tafnit may show validation instead. Review descriptions retain
+their original symbols after whitespace normalization; entry/readback use the
+same legacy-safe sign replacements as the Rosh flow. Catalogued rows retain and
+verify the reviewed description as well as
 the exact part number, because one SKU may identify several configurations.
 When a matching catalog locks a different description, the quotation text goes
 in line remarks. Verification reads that saved line through its line-number
@@ -58,5 +73,6 @@ supplier website only when the catalog has no URL. Empty optional website fields
 are omitted from canonical data so existing reviewed-data checkpoints still match.
 
 Tests use synthetic data and mocked desktop boundaries. No live requisition is
-created during development. Documentation distinguishes offline verification
-from live form validation, and explains recovery and support limits.
+created by the tests. Home-screen startup has not yet been verified live.
+Documentation distinguishes offline verification from live form validation,
+and explains recovery and support limits.

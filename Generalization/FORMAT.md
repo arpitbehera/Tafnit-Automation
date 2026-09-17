@@ -6,6 +6,11 @@ required keys and may include the documented optional item `website`.
 Unknown/duplicate keys are errors, so a misspelled tax or
 shipping field cannot be silently ignored.
 
+Text values are trimmed and repeated whitespace, tabs and newlines are
+collapsed to single spaces. Normalized text values are limited to 4,000
+characters; Tafnit fields can impose shorter limits during entry. Exported
+review data preserves the normalized wording and symbols, not PDF layout.
+
 | Key | Meaning |
 | --- | --- |
 | `schema_version` | Integer `1` |
@@ -49,7 +54,7 @@ The program stops before row save when no website is available.
 Uncatalogued rows always use reviewed item/supplier input, replacing any stale
 website left in the form by an earlier item.
 
-The original `description` stays unchanged in JSON/CSV. Entry and table
+The normalized `description` keeps its original symbols in JSON/CSV. Entry and table
 verification use `≥` → `>=`, `≤` → `<=`, and `Ø` → `dia. ` because these signs
 can become `?` during a full Tafnit page save. The review displays both versions
 when they differ. The reviewed description is entered and checked for catalogued

@@ -4,6 +4,14 @@ Copy [config.example.json](config.example.json) to `config.local.json`, fill it
 locally, and keep it private. All institution and code values are strings to
 preserve leading zeros. This schema is separate from the Rosh profile.
 
+The default profile is `Generalization/config.local.json` beside the entry
+script. Choose another file with `--config PATH`. Live entry requires a valid
+profile. `--dry-run` loads one only if you pass `--config` explicitly.
+Unknown, duplicate or missing keys are rejected. All nine `header` values and
+both classification codes must be nonblank, even for an all-catalog quotation.
+When `customs.required` is `false`, keep the `description` and `usage` keys;
+their values may be empty strings.
+
 | Setting | Value |
 | --- | --- |
 | `tafnit_host` | Your logged-in Tafnit hostname, without scheme/path |
@@ -26,6 +34,13 @@ when correct for the items. Classification is intentionally blank in this
 example. A mixed-classification uncatalogued order needs manual handling or an
 adapter extension. Do not apply the original optics customs sentence to other
 goods without reviewing it.
+
+`request_type_code` selects a type **inside** the purchase-request form. It
+does not change the home-screen menu option: when opening a new request, both
+entry points target exactly **דרישה לרכש**, reached through
+**עברית → יזם → עברית → קליטה** when needed. An already-open request bypasses
+menu navigation; resume never opens a new one. A service-order menu or another
+form cannot be selected by changing this code.
 
 ## Currency and totals
 

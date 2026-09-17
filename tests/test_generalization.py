@@ -457,9 +457,10 @@ class CliTests(unittest.TestCase):
         m = module("tafnit")
         args = [str(self.pdf), "--data", str(self.data), "--config", str(self.config), "--state-dir", str(self.artifacts)]
         ui = FakeDesktop()
-        with patch.object(m, "GeneralDesktop", return_value=ui), patch.object(m.time, "sleep"):
+        with patch.object(m, "GeneralDesktop", return_value=ui) as desktop, patch.object(m.time, "sleep"):
             code, prompts = self.invoke(args, ["007", "Example Instruments Ltd", "", "https://vendor.example", "ENTER"])
         self.assertEqual(code, 0)
+        self.assertTrue(desktop.call_args.kwargs["allow_open_request"])
         self.assertEqual(len(prompts), 5)
         self.assertNotIn(("handoff",), ui.actions)
         changed = copy.deepcopy(QUOTE)
@@ -499,9 +500,10 @@ class CliTests(unittest.TestCase):
         m = module("tafnit")
         args = [str(self.pdf), "--data", str(self.data), "--config", str(self.config),
                 "--state-dir", str(self.artifacts), "--resume"]
-        with patch.object(m, "GeneralDesktop", return_value=FakeDesktop()), patch.object(m.time, "sleep"):
+        with patch.object(m, "GeneralDesktop", return_value=FakeDesktop()) as desktop, patch.object(m.time, "sleep"):
             code, prompts = self.invoke(args, ["ENTER"])
         self.assertEqual(code, 0)
+        self.assertFalse(desktop.call_args.kwargs["allow_open_request"])
         self.assertEqual(len(prompts), 1)
 
     def test_help_supports_direct_script_from_another_directory(self):

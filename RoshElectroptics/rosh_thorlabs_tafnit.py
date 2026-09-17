@@ -2,6 +2,7 @@
 
 Windows: uv run RoshElectroptics/rosh_thorlabs_tafnit.py "D:\\path\\quotation.pdf"
 Preview: add --dry-run to validate without operating the desktop.
+Live entry starts at the logged-in Tafnit home screen or a blank purchase request.
 
 See ROSH_THORLAB_TAFNIT.md for setup, recovery, and the supported PDF format.
 Imports and --dry-run do not operate the desktop or read login credentials.
@@ -24,6 +25,7 @@ from typing import Any
 from urllib.parse import quote as url_quote
 
 CUSTOMS_TEXT = "Optical components for use in an optics research laboratory"
+PURCHASE_REQUEST_LABEL = "דרישה לרכש"
 CENT = Decimal("0.01")
 NUMBER = r"\d[\d,]*(?:\.\d+)?"
 
@@ -390,7 +392,7 @@ class ChromeReader:
 
 class TafnitDesktop:
     """Normal UI input with DOM readback; every wait is bounded."""
-    def __init__(self, artifacts: Path, config: UserConfig):
+    def __init__(self, artifacts: Path, config: UserConfig, *, allow_open_request: bool = True):
         if os.name != "nt":
             raise AutomationError("Desktop entry needs Windows Python, not WSL Python. --dry-run works anywhere.")
         import pyautogui as p
@@ -400,22 +402,126 @@ class TafnitDesktop:
         p.PAUSE = .08
         self.artifacts = artifacts
         self.config = config
-        windows = [w for w in p.getAllWindows() if "Google Chrome" in w.title
-                   and ("דרישה לרכש" in w.title or "Purchase request" in w.title)]
+        chrome = self.chrome_windows()
+        windows = [w for w in chrome if self.is_request_window(w)]
+        if not windows:
+            if not allow_open_request:
+                raise AutomationError("To resume, reopen the original purchase request; a new request will not be opened.")
+            windows = [w for w in chrome if any(label in w.title.casefold()
+                       for label in ("tafnit", "תפנית", config.tafnit_host.casefold()))]
+            # Some installations use only the institution name as the title.
+            # A lone Chrome window is usable only after verifying its host.
+            if not windows and len(chrome) == 1:
+                windows = chrome
         if len(windows) != 1:
-            raise AutomationError("Open one new blank Tafnit purchase-request window in Chrome on display 1.")
-        self.main = windows[0]
+            raise AutomationError("Keep exactly one Tafnit home screen or purchase-request window open in Chrome on display 1.")
+        self.bind_window(windows[0])
+        info = self.page_info()
+        self.check_page_setup(info)
+        if info["request"] is None:
+            if not allow_open_request:
+                raise AutomationError("To resume, reopen the original purchase request.")
+            # A request window still loading is not a home-screen menu.
+            if self.is_request_window(self.main):
+                raise AutomationError("The purchase-request form has not loaded. Wait for it before resuming.")
+            self.open_purchase_request()
+        elif not info["form"] or not self.is_request_window(self.main):
+            raise AutomationError("The selected window is not a supported Tafnit purchase request.")
+
+    def chrome_windows(self) -> list[Any]:
+        return [w for w in self.p.getAllWindows() if "Google Chrome" in w.title]
+
+    @staticmethod
+    def is_request_window(window: Any) -> bool:
+        return PURCHASE_REQUEST_LABEL in window.title or "purchase request" in window.title.casefold()
+
+    def bind_window(self, window: Any) -> None:
+        self.main = window
         self.main.activate()
         self.main.maximize()
         if self.main.left > 0:
             raise AutomationError("Move Tafnit to display 1 before running the script.")
         self.reader = ChromeReader(self.main)
-        info = self.reader.read("({host:location.hostname,dpr:devicePixelRatio,request:document.getElementById('COM')?.value})")
-        if info["host"] != config.tafnit_host or info["request"] is None:
-            raise AutomationError("The selected window is not a Tafnit purchase request.")
+
+    def page_info(self) -> dict:
+        return self.reader.read("""({host:location.hostname,dpr:devicePixelRatio,
+          request:document.getElementById('COM')?.value??null,
+          status:document.getElementById('STTS')?.value??null,
+          form:['COM','STTS','SUGD','MHTD','KM'].every(id=>!!document.getElementById(id))})""")
+
+    def check_page_setup(self, info: dict) -> None:
+        if info["host"].casefold() != self.config.tafnit_host.casefold():
+            raise AutomationError("The selected Chrome window is not on the configured Tafnit host.")
         self.dpr = info["dpr"]
-        if tuple(p.size()) != (2560, 1440) or self.dpr != 1:
+        if tuple(self.p.size()) != (2560, 1440) or self.dpr != 1:
             raise AutomationError("Use the tested display-1 setup: 2560x1440, Windows scaling 100%, Chrome zoom 100%.")
+
+    def visible_controls(self, selector: str) -> list[dict]:
+        """Read visible controls and unique CSS paths without activating them."""
+        return self.reader.read("""(()=>{
+          const visible=e=>e.getClientRects().length&&
+            !['hidden','collapse'].includes(getComputedStyle(e).visibility)&&
+            !e.matches(':disabled')&&e.getAttribute('aria-disabled')!=='true';
+          const path=e=>{const parts=[];while(e&&e.nodeType===1){
+            parts.unshift(e.localName+':nth-child('+([...e.parentNode.children].indexOf(e)+1)+')');
+            e=e.parentElement;}return parts.join(' > ');};
+          return [...document.querySelectorAll(SELECTOR)].filter(visible).map(e=>({
+            selector:path(e),text:e.innerText||e.value||e.getAttribute('aria-label')||
+              e.getAttribute('alt')||e.title||''}));
+        })()""".replace("SELECTOR", json.dumps(selector)))
+
+    def controls_with_text(self, text: str) -> list[str]:
+        controls = self.visible_controls('a,button,input[type="button"],input[type="submit"],'
+                                         '[role="button"],[role="menuitem"],[onclick]')
+        matches = [c["selector"] for c in controls
+                   if normal(re.sub(r"[\u200e\u200f\u202a-\u202e\u2066-\u2069]", "", c["text"])) == text]
+        # A link nested inside a clickable menu row represents one choice.
+        return [s for s in matches if not any(other.startswith(s + " > ") for other in matches)]
+
+    def purchase_request_control(self) -> str | None:
+        choices = self.controls_with_text(PURCHASE_REQUEST_LABEL)
+        if len(choices) > 1:
+            raise AutomationError(f"Expected exactly one visible '{PURCHASE_REQUEST_LABEL}' option; the menu is ambiguous.")
+        return choices[0] if choices else None
+
+    def open_purchase_menu(self) -> str:
+        """Follow kalirkosh's Hebrew → Initiator → Hebrew → Entry menu path."""
+        self.template("ivrit - main", relative_position=(.5, .3))
+        self.template("yazam", relative_position=(-.5, .3))
+        self.template("ivrit - secondary")
+        self.template("klita")
+        # Clear the hover highlight as in kalirkosh, outside the failsafe corner.
+        self.p.moveTo(2, 2)
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline:
+            choice = self.purchase_request_control()
+            if choice:
+                return choice
+            time.sleep(.5)
+        raise AutomationError(f"The home-screen menu did not show exactly '{PURCHASE_REQUEST_LABEL}'. Inspect the menu before resuming.")
+
+    def open_purchase_request(self) -> None:
+        choice = self.purchase_request_control() or self.open_purchase_menu()
+        previous_handles = {w._hWnd for w in self.chrome_windows()}
+        self.click_selector(choice)  # Exactly one click; never retry creation.
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            opened = [w for w in self.chrome_windows() if w._hWnd not in previous_handles]
+            if len(opened) > 1:
+                raise AutomationError("Multiple Chrome windows opened; inspect Tafnit before resuming.")
+            if opened and opened[0]._hWnd != self.main._hWnd:
+                self.bind_window(opened[0])
+            info = self.page_info()
+            if info["host"]:  # An about:blank popup may still be loading.
+                self.check_page_setup(info)
+                if info["form"]:
+                    if not self.is_request_window(self.main):
+                        raise AutomationError(f"The opened window is not a '{PURCHASE_REQUEST_LABEL}' purchase request.")
+                    if normal(info["request"]) or info["status"] != "0":
+                        raise AutomationError("The opened purchase request must be NEW BLANK before entry.")
+                    return
+            time.sleep(.5)
+        raise AutomationError(f"'{PURCHASE_REQUEST_LABEL}' did not open a blank form in time. Check Chrome popup blocking and Tafnit; reopen the original form before --resume.")
 
     def value(self, field: str) -> str:
         result = self.reader.read(f"document.getElementById({json.dumps(field)})?.value")
@@ -783,10 +889,11 @@ def main(argv: list[str] | None = None) -> int:
         if state.data.get("config_sha256", config_hash) != config_hash:
             raise AutomationError("Local configuration changed since this run began. Restore it before resuming.")
         state.update(config_sha256=config_hash)
-        print("Keep Tafnit's blank purchase request open in Chrome on display 1.")
+        print("Keep the original purchase request open in Chrome on display 1." if args.resume
+              else f"Keep Tafnit's home screen or a blank purchase request open in Chrome on display 1. The script opens '{PURCHASE_REQUEST_LABEL}' when needed.")
         print("Starting in 5 seconds. Move the mouse to a screen corner to stop; Ctrl+C also stops.")
         time.sleep(5)
-        ui = TafnitDesktop(directory, config)
+        ui = TafnitDesktop(directory, config, allow_open_request=not args.resume)
         run_entry(ui, quote, pdf, state, budget_note)
         print("STOPPED after requesting final confirmation. Inspect Tafnit's confirmation or validation message; no final approval was clicked.")
         return 0
