@@ -21,6 +21,7 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote as url_quote
 
 CUSTOMS_TEXT = "Optical components for use in an optics research laboratory"
 CENT = Decimal("0.01")
@@ -104,6 +105,11 @@ class QuoteItem:
     @property
     def exact_amount(self) -> Decimal:
         return self.quantity * self.unit_price * (1 - self.discount / 100)
+
+    @property
+    def tafnit_description(self) -> str:
+        # Tafnit's legacy text transport replaces these Unicode signs with '?'.
+        return self.description.replace("≥", ">=").replace("≤", "<=").replace("Ø", "dia. ")
 
 
 @dataclass(frozen=True)
@@ -252,10 +258,11 @@ def verify_rows(quote: Quote, rows: list[list[str]], *, complete: bool = True) -
             raise AutomationError(f"Line {item.line} is not in USD.")
         if normal(cells[10]):
             # Catalog rows display a manufacturer part and Tafnit's own text.
-            part = re.sub(r"\s+\([A-Z ]*WH\)$", "", item.part_number)
+            # Rosh appends warehouse notes and the UK source note to the SKU.
+            part = re.sub(r"\s+\((?:[A-Z ]*WH|UK)\)$", "", item.part_number)
             if normal(cells[7]) != part:
                 raise AutomationError(f"Line {item.line} catalog part does not match {item.part_number}.")
-        elif re.sub(r"\s+", "", cells[9]) != re.sub(r"\s+", "", item.description):
+        elif re.sub(r"\s+", "", cells[9]) != re.sub(r"\s+", "", item.tafnit_description):
             # Uncatalogued rows leave the manufacturer column blank. Their
             # description is from the quote; line wrapping can split words.
             raise AutomationError(f"Line {item.line} description does not match the quotation.")
@@ -444,7 +451,8 @@ class TafnitDesktop:
 
     def fill(self, field: str, value: Any, *, numeric: bool = False) -> None:
         value = str(value)
-        target = self.element("#" + field)
+        # ID selectors ignore case in Tafnit's quirks mode (e.g. Spk vs SPK).
+        target = self.element(f'[id={json.dumps(field)}]')
         if target["readonly"]:
             raise AutomationError(f"Field {field} is read-only.")
         if target["maxlength"] and target["maxlength"] > 0 and len(value) > target["maxlength"]:
@@ -461,7 +469,7 @@ class TafnitDesktop:
             raise AutomationError(f"Readback failed for {field}: expected {value!r}, got {actual!r}.")
 
     def select(self, field: str, value: str) -> None:
-        target = self.element("#" + field)
+        target = self.element(f'[id={json.dumps(field)}]')
         choices = [i for i, opt in enumerate(target["options"]) if opt["value"] == value]
         if len(choices) != 1:
             raise AutomationError(f"Cannot select {value!r} in {field}.")
@@ -584,9 +592,14 @@ class TafnitDesktop:
         time.sleep(1)
         catalog = self.value("Cat")
         if not catalog:
-            self.fill("DescLarge", item.description)
+            self.fill("DescLarge", item.tafnit_description)
         elif not catalog.isdigit():
             raise AutomationError(f"Unexpected catalog number {catalog!r}.")
+        if not self.value("WebSite"):
+            # Tafnit requires a website even for some catalogued items. Rosh's
+            # parenthesized warehouse/country note is not part of the URL SKU.
+            sku = item.part_number.split(" ", 1)[0]
+            self.fill("WebSite", "https://www.thorlabs.com/item/" + url_quote(sku, safe=""))
         self.fill("Quan", item.quantity, numeric=True)
         self.fill("Coin", "1", numeric=True)
         self.fill("Scm", item.unit_price, numeric=True)
@@ -605,7 +618,10 @@ class TafnitDesktop:
     def save(self) -> str:
         # An interrupted upload can leave this hidden-but-required archive
         # metadata empty. Populate it through the visible attachment dialog.
-        if not self.value("DESC"):
+        # After a page reload the dialog is not mounted, so DESC is absent and
+        # is not part of Tafnit's save validation until the dialog is opened.
+        description = self.reader.read("document.getElementById('DESC')?.value")
+        if description is not None and not normal(description):
             self.click("NISPAH")
             self.click("BOpenArchiveUtilWin")
             self.fill("DESC", "Quotation and customs documents")
@@ -700,6 +716,8 @@ def run_entry(ui: Any, q: Quote, pdf: Path, state: Checkpoint, budget_note: str)
     state.update(stage="customs", request=request)
     ui.ensure_customs(state)
     ui.save()
+    # Full-page saves can corrupt characters that survived field readback.
+    verify_rows(q, ui.item_rows())
     ui.click("NISPAH")
     attachments = ui.attachment_rows()
     if (len(attachments) != 2
@@ -709,7 +727,7 @@ def run_entry(ui: Any, q: Quote, pdf: Path, state: Checkpoint, budget_note: str)
     if number(ui.value("NetoDollar")) != q.exact_total.quantize(Decimal('.001'), rounding=ROUND_HALF_UP):
         raise AutomationError("Tafnit's saved USD total does not match the verified item amounts.")
     ui.verify_header(q, budget_note)
-    print(f"Saved requisition {request}. Opening final confirmation for YOU to approve.", flush=True)
+    print(f"Saved requisition {request}. Requesting final confirmation; Tafnit may display a validation message.", flush=True)
     leave_final_confirmation(ui, state)
 
 
@@ -770,7 +788,7 @@ def main(argv: list[str] | None = None) -> int:
         time.sleep(5)
         ui = TafnitDesktop(directory, config)
         run_entry(ui, quote, pdf, state, budget_note)
-        print("STOPPED for your final confirmation. Inspect Tafnit's dialog and confirm it yourself.")
+        print("STOPPED after requesting final confirmation. Inspect Tafnit's confirmation or validation message; no final approval was clicked.")
         return 0
     except (QuoteError, AutomationError, OSError, ValueError, KeyboardInterrupt) as exc:
         if ui is not None:

@@ -1,5 +1,7 @@
 # Personal configuration and credentials
 *.local.json
+*.local.txt
+*.local.json.tmp
 local_config.py
 .env
 .env.*

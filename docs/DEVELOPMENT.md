@@ -1,11 +1,13 @@
 # Development and tests
 
-The entry point is `RoshElectroptics/rosh_thorlabs_tafnit.py`. Both invocation
-styles work from the repository root:
+Entry points are `RoshElectroptics/rosh_thorlabs_tafnit.py` and
+`Generalization/tafnit.py`. Both invocation styles work from the repository root:
 
 ```powershell
 uv run RoshElectroptics/rosh_thorlabs_tafnit.py --help
 uv run python -m RoshElectroptics.rosh_thorlabs_tafnit --help
+uv run Generalization/tafnit.py --help
+uv run python -m Generalization.tafnit --help
 uv run python -m unittest discover -s tests -v
 ```
 
@@ -28,6 +30,23 @@ Preserve the final-confirmation boundary when modifying the workflow:
 checkpoint before opening the dialog, never approve it, never issue browser
 inputs afterward, and never automatically repeat that final action on resume.
 Do not create an actual order merely to exercise tests.
+
+The generalized workflow additionally tests local JSON/CSV normalization,
+non-USD currencies, units/tax mappings, exact supplier resolution, input-bound
+resume, saved-draft defaults, and no GUI access on dry-run, cancellation or
+handoff resume. It does not infer a universal PDF layout or use cloud extraction.
+Its desktop adapter reuses low-level helpers while replacing supplier-specific
+entry logic. See [the design](../Generalization/DESIGN.md) and
+[format documentation](../Generalization/FORMAT.md).
+
+`tests/test_generalization_fixes.py` covers propagation of the fixes found in
+live Rosh ordering: legacy-safe descriptions, `(UK)` source notes, required
+product websites, exact-case field lookup, missing archive fields after reload,
+and post-save corruption blocking the final handoff. Generalization inherits
+the corrected `fill`, `select` and `save` helpers directly. Website data remains
+local and participates in the resume fingerprint when nonempty.
+The same regression suite checks that catalog lookup preserves quoted
+configuration details, including different descriptions sharing a supplier SKU.
 
 Use `uv lock` after editing dependencies, then `uv sync --locked`. Keep real
 quotation data and local configuration out of fixtures and commit history; see

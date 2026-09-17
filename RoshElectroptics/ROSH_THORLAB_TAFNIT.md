@@ -83,9 +83,10 @@ Tafnit may display three decimal places while the PDF rounds each line to two.
 The script checks both totals using decimal arithmetic and the original prices;
 it does not enter the already discounted unit price a second time.
 
-When the terminal reports `STOPPED for your final confirmation`, inspect the
-request and Tafnit's dialog, then confirm it yourself. If Tafnit displays a
-validation error instead, resolve it manually. The automation makes no browser
-inputs after its final submission action.
+When the terminal reports `STOPPED after requesting final confirmation`, inspect
+the request and Tafnit's dialog, then confirm it yourself. If Tafnit displays a
+validation error instead, resolve it manually. The checkpoint records the
+handoff attempt, not successful submission. The automation makes no browser
+inputs after that action.
 
 See [recovery instructions](../docs/TROUBLESHOOTING.md) for interrupted runs.

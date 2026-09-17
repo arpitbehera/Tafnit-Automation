@@ -5,6 +5,8 @@ import tempfile
 import unittest
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 
 HEADER = """Rosh Electroptics Ltd.
@@ -110,6 +112,44 @@ TOTAL USD 90.01'''
         with self.assertRaisesRegex(m.AutomationError, "part"):
             m.verify_rows(q, [row], complete=False)
 
+    def test_description_comparison_preserves_inequalities_in_legacy_text(self):
+        m = self.module()
+        q = m.parse_quote_text(QUOTE.replace("30 mm Cage Cube (USA)", "Adapter ≥12 mm, ≤20 mm"))
+        row = ["", "135.135", "45.045", "10.010", "$", "10", "5", "", "",
+               "Adapter >=12 mm, <=20 mm", "", "1"]
+        self.assertEqual(m.verify_rows(q, [row], complete=False), 1)
+        self.assertEqual(q.items[0].description, "Adapter ≥12 mm, ≤20 mm")
+        row[9] = "Adapter ?12 mm, ?20 mm"
+        with self.assertRaisesRegex(m.AutomationError, "description"):
+            m.verify_rows(q, [row], complete=False)
+
+    def test_diameter_notation_survives_legacy_description_storage(self):
+        m = self.module()
+        q = m.parse_quote_text(QUOTE.replace("30 mm Cage Cube (USA)", "Adapter for Ø12 mm"))
+        row = ["", "135.135", "45.045", "10.010", "$", "10", "5", "", "",
+               "Adapter for dia. 12 mm", "", "1"]
+        self.assertEqual(q.items[0].tafnit_description, "Adapter for dia. 12 mm")
+        self.assertEqual(q.items[0].description, "Adapter for Ø12 mm")
+        self.assertEqual(m.verify_rows(q, [row], complete=False), 1)
+        row[9] = "Adapter for ?12 mm"
+        with self.assertRaisesRegex(m.AutomationError, "description"):
+            m.verify_rows(q, [row], complete=False)
+
+    def test_catalog_verification_recognizes_rosh_uk_source_note(self):
+        m = self.module()
+        q = m.parse_quote_text(QUOTE.replace("1 DEMO-CUBE", "1 DEMO-CUBE (UK)"))
+        row = ["", "135.135", "45.045", "10.010", "$", "10", "5", "DEMO-CUBE",
+               "", "Catalog description", "12345", "1"]
+        self.assertEqual(m.verify_rows(q, [row], complete=False), 1)
+        self.assertEqual(q.items[0].part_number, "DEMO-CUBE (UK)")
+        row[7] = "DEMO-CUBE/M"
+        with self.assertRaisesRegex(m.AutomationError, "catalog part"):
+            m.verify_rows(q, [row], complete=False)
+        q = m.parse_quote_text(QUOTE.replace("1 DEMO-CUBE", "1 DEMO-CUBE (LEFT)"))
+        row[7] = "DEMO-CUBE"
+        with self.assertRaisesRegex(m.AutomationError, "catalog part"):
+            m.verify_rows(q, [row], complete=False)
+
     def test_resume_rejects_different_pdf(self):
         m = self.module()
         self.assertTrue(hasattr(m, "Checkpoint"), "Checkpoint recovery is not implemented")
@@ -175,6 +215,34 @@ TOTAL USD 90.01'''
             with self.assertRaisesRegex(m.AutomationError, "NEW BLANK"):
                 m.run_entry(ExistingOrder(), m.parse_quote_text(QUOTE), Path("quote.pdf"), state, "Example lab funding note")
 
+    def test_save_time_description_corruption_blocks_final_handoff(self):
+        m = self.module()
+        q = m.parse_quote_text(QUOTE)
+        rows = [
+            ["", "135.135", "45.045", "10.010", "$", "10", "5", "", "", q.items[0].description, "", "1"],
+            ["", "6.075", "2.025", "2.250", "$", "10", "1", "", "", q.items[1].description, "", "2"],
+        ]
+        handoffs = []
+
+        def save():
+            rows[0][9] = "Corrupted after save"
+            return "123"
+
+        ui = SimpleNamespace(
+            value=lambda field: {"COM": "", "STTS": "0", "NetoDollar": "47.070"}[field],
+            verify_header=lambda quote, note: None, item_rows=lambda: rows,
+            save=save, ensure_customs=lambda state: None, click=lambda name: None,
+            attachment_rows=lambda: ["Quote FDTEST", "סכמל הרהצה ספוט"],
+            open_final_confirmation=lambda: handoffs.append(True),
+        )
+        with tempfile.TemporaryDirectory() as d:
+            state = m.Checkpoint(Path(d) / "state.json", "hash-a", resume=False)
+            state.update(stage="items")
+            with self.assertRaisesRegex(m.AutomationError, "description"):
+                m.run_entry(ui, q, Path("quote.pdf"), state, "Funding note")
+            self.assertEqual(handoffs, [])
+            self.assertNotEqual(state.data["stage"], "awaiting_user_confirmation")
+
     def test_failed_final_click_is_not_retried_on_resume(self):
         m = self.module()
         class FailedUi:
@@ -198,6 +266,90 @@ TOTAL USD 90.01'''
             m.leave_final_confirmation(Ui(), state)
             self.assertEqual(actions, ["open-final-confirmation"])
             self.assertEqual(json.loads(state.path.read_text())["stage"], "awaiting_user_confirmation")
+
+
+class DesktopTests(unittest.TestCase):
+    def test_save_handles_unmounted_archive_description_after_page_reload(self):
+        from RoshElectroptics import rosh_thorlabs_tafnit as app
+        for description in (None, "", "Quote FDTEST"):
+            with self.subTest(description=description):
+                actions = []
+                ui = object.__new__(app.TafnitDesktop)
+                ui.reader = SimpleNamespace(read=lambda expression: description)
+
+                def value(field):
+                    if field == "DESC":
+                        if description is None:
+                            raise app.AutomationError("Missing Tafnit field DESC.")
+                        return description
+                    self.assertEqual(field, "COM")
+                    return "12345"
+
+                ui.value = value
+                ui.click = actions.append
+                ui.fill = lambda field, text: actions.append((field, text))
+                ui.click_selector = lambda selector: actions.append("close-archive")
+                ui.screenshot = lambda name: None
+                with patch.object(app.time, "sleep"):
+                    self.assertEqual(ui.save(), "12345")
+                self.assertEqual(actions[-1], "KSAVE")
+                if description == "":
+                    self.assertEqual(actions[:2], ["NISPAH", "BOpenArchiveUtilWin"])
+                    self.assertIn(("DESC", "Quotation and customs documents"), actions)
+                else:
+                    self.assertEqual(actions, ["KSAVE"])
+
+    def test_uncatalogued_item_has_product_website_before_row_save(self):
+        from RoshElectroptics import rosh_thorlabs_tafnit as app
+        item = app.QuoteItem(1, "DEMO-B (DE WH)", "Collimator ≥1 mm", Decimal("2"),
+                             Decimal("100"), Decimal("10"), Decimal("180"))
+        values = {"ln": "1", "Cat": "", "WebSite": ""}
+        saved = []
+        ui = object.__new__(app.TafnitDesktop)
+        ui.value = lambda field: values.get(field, "")
+        ui.fill = lambda field, value, **kwargs: values.update({field: str(value)})
+        ui.select = lambda field, value: values.update({field: value})
+        ui.screenshot = lambda name: None
+
+        def click(name):
+            if name == "KSVLIN":
+                self.assertEqual(values["WebSite"],
+                                 "https://www.thorlabs.com/item/DEMO-B")
+                saved.append(dict(values))
+                values["ln"] = "2"
+
+        ui.click = click
+        with patch.object(app.time, "sleep"):
+            ui.enter_item(item)
+        self.assertEqual(len(saved), 1)
+        self.assertEqual(saved[0]["CatSpk"], "DEMO-B (DE WH)")
+        self.assertEqual(saved[0]["DescLarge"], "Collimator >=1 mm")
+        self.assertEqual(saved[0]["Scm"], "100")
+        self.assertEqual(saved[0]["Pre"], "10")
+
+    def test_catalogued_item_fills_missing_website_and_preserves_existing_link(self):
+        from RoshElectroptics import rosh_thorlabs_tafnit as app
+        item = app.QuoteItem(1, "DEMO-B", "Quote text", Decimal("2"),
+                             Decimal("100"), Decimal("10"), Decimal("180"))
+        for existing in ("", "https://www.thorlabs.com/catalog-product"):
+            with self.subTest(existing=existing):
+                values = {"ln": "1", "Cat": "12345", "WebSite": existing,
+                          "DescLarge": "Resolved catalog description"}
+                ui = object.__new__(app.TafnitDesktop)
+                ui.value = lambda field: values.get(field, "")
+                ui.fill = lambda field, value, **kwargs: values.update({field: str(value)})
+                ui.screenshot = lambda name: None
+
+                def click(name):
+                    if name == "KSVLIN":
+                        self.assertEqual(values["WebSite"], existing or
+                                         "https://www.thorlabs.com/item/DEMO-B")
+                        values["ln"] = "2"
+
+                ui.click = click
+                with patch.object(app.time, "sleep"):
+                    ui.enter_item(item)
+                self.assertEqual(values["DescLarge"], "Resolved catalog description")
 
 
 if __name__ == "__main__":

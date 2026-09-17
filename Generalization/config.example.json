@@ -1,0 +1,26 @@
+{
+  "tafnit_host": "",
+  "header": {
+    "MEHKAR": "", "IZAM": "", "MHLK": "",
+    "Building": "", "Floor": "", "Room": "",
+    "CBuilding": "", "CFloor": "", "CRoom": ""
+  },
+  "budget_note": "",
+  "request_type_code": "4",
+  "purpose_code": "1",
+  "currencies": {
+    "USD": {
+      "code": "1",
+      "row_labels": ["$ ארהב", "USD"],
+      "net_total_field": "NetoDollar",
+      "tax_total_field": "",
+      "gross_total_field": ""
+    }
+  },
+  "unit_field": "",
+  "units": {
+    "PCS": {"code": "", "row_labels": [""]}
+  },
+  "classification": {"category_code": "", "subcategory_code": ""},
+  "customs": {"required": true, "description": "", "usage": ""}
+}

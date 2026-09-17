@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "vendor_name": "Example Instruments Ltd",
+  "number": "EXAMPLE-2030-42",
+  "date": "2030-01-02",
+  "currency": "USD",
+  "currency_decimals": 2,
+  "payment_terms": "30 days",
+  "notes": "Synthetic example. Freight is a separate item. No tax quoted.",
+  "net_total": "28.02",
+  "tax_total": "0.00",
+  "total": "28.02",
+  "items": [
+    {
+      "part_number": "EX-1", "description": "Example sensor",
+      "quantity": "2", "unit": "PCS", "unit_price": "10.01",
+      "discount_percent": "0", "line_total": "20.02",
+      "website": "https://vendor.example/product/EX-1"
+    },
+    {
+      "part_number": "", "description": "Freight",
+      "quantity": "1", "unit": "PCS", "unit_price": "8.00",
+      "discount_percent": "0", "line_total": "8.00"
+    }
+  ]
+}
