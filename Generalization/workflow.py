@@ -51,7 +51,7 @@ def run_entry(ui: Any, q: Quotation, pdf: Path, state: Checkpoint, config: Confi
         ui.prepare(q, pdf)
         state.update(stage="items")
     ui.verify_header(q)
-    count = verify_rows(q, ui.item_rows(), config, complete=False)
+    count = verify_rows(q, ui.item_rows(), config, complete=False, read_catalog_details=ui.read_item_details)
     recorded_rows = state.data.get("rows", 0)
     if type(recorded_rows) is not int or recorded_rows < 0 or count < recorded_rows:
         raise AutomationError("Previously checkpointed rows are missing; inspect the request before resuming.")
@@ -73,7 +73,7 @@ def run_entry(ui: Any, q: Quotation, pdf: Path, state: Checkpoint, config: Confi
             state.update(stage="items", pending_line=line)
             ui.enter_item(item, line)
             state.update(rows=line, pending_line=None)
-    verify_rows(q, ui.item_rows(), config)
+    verify_rows(q, ui.item_rows(), config, read_catalog_details=ui.read_item_details)
     state.update(stage="saving")
     request = ui.save()
     state.update(stage="customs", request=request)
@@ -88,7 +88,7 @@ def run_entry(ui: Any, q: Quotation, pdf: Path, state: Checkpoint, config: Confi
             or sum(quote_attachment(row, q.number) for row in attachments) != 1):
         raise AutomationError("Saved attachments differ from the expected quotation/customs documents.")
     # Recheck saved rows too: header and save operations may trigger calculations.
-    verify_rows(q, ui.item_rows(), config)
+    verify_rows(q, ui.item_rows(), config, read_catalog_details=ui.read_item_details)
     verify_totals(ui, q, config)
     ui.verify_header(q)
     state.update(stage="draft_ready", unverified_totals=unverified_totals(q, config))

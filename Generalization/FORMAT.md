@@ -54,9 +54,13 @@ verification use `≥` → `>=`, `≤` → `<=`, and `Ø` → `dia. ` because th
 can become `?` during a full Tafnit page save. The review displays both versions
 when they differ. The reviewed description is entered and checked for catalogued
 items too: a shared supplier SKU does not prove that lengths, connectors or other
-configuration details match. A read-only description field stops entry for manual
-handling. Other text is not transliterated; corrupted descriptions cause a stop
-after saving, before any final handoff.
+configuration details match. If Tafnit locks a different catalog description,
+the quoted text is stored in `Remarks` as
+`Quote <number>, line <line>: <part number> - <description>`, using the same sign
+replacements. Saved-line verification requires the exact quote remarks and
+matching catalog, supplier part and manufacturer part. Other text is not
+transliterated; corrupted descriptions or quotation remarks stop the run before
+any final handoff.
 
 The validator checks each line using exact Decimal arithmetic:
 
@@ -135,9 +139,11 @@ to an input location outside the output directory if using it for a later run.
   quantity basis and configure the actual Tafnit unit. A missing mapping stops.
 - **Catalog substitutions:** a returned catalog manufacturer's part must match
   the reviewed part number exactly. The reviewed description must also survive
-  entry and full-page save; a generic catalog description cannot substitute for
-  the quoted configuration, even when the SKU matches. Older drafts saved with
-  catalog descriptions may stop on resume and need manual correction.
+  entry and full-page save, either in the editable description or in verified
+  quotation remarks beside a locked catalog description. A generic description
+  alone cannot substitute for the quoted configuration, even when the SKU
+  matches. Older drafts without those remarks may stop on resume and need
+  manual correction. The JSON description always remains the quoted text.
 - **Known Rosh warehouse/source suffixes:** the Rosh adapter removes suffixes
   such as `(DE WH)` and `(UK)` for catalog matching and records the original
   value in `notes`. It derives each Thorlabs product URL from the original SKU

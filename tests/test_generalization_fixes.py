@@ -74,13 +74,14 @@ class DesktopFixTests(unittest.TestCase):
         ui.quote = quotation.parse_quotation(QUOTE)
         ui.supplier = SimpleNamespace(website=fallback)
         values = {"ln": "1", "Cat": "", "CatSpk": "", "WebSite": existing_site,
-                  "DescLarge": "Catalog description"}
+                  "DescLarge": "Catalog description", "Lbb3": ""}
         saved = []
         ui.value = lambda field: values[field]
         def fill(field, value, **kwargs):
             values[field] = str(value)
-            if field == "CatSpk": values["Cat"] = catalog
+            if field == "CatSpk": values.update(Cat=catalog, Lbb3=str(value) if catalog else "")
         ui.fill = fill
+        ui.element = lambda selector: {"readonly": False, "value": values["DescLarge"]}
         ui.select = lambda field, value: values.update({field: value})
         ui.screenshot = lambda name: None
         def click(name):

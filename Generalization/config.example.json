@@ -11,15 +11,15 @@
   "currencies": {
     "USD": {
       "code": "1",
-      "row_labels": ["$ ארהב", "USD"],
-      "net_total_field": "NetoDollar",
-      "tax_total_field": "",
-      "gross_total_field": ""
+      "row_labels": ["$ ארהב", "בהרא $", "USD"],
+      "net_total_field": "BrutoaDollar",
+      "tax_total_field": "MamDollar",
+      "gross_total_field": "NetoDollar"
     }
   },
   "unit_field": "",
   "units": {
-    "PCS": {"code": "", "row_labels": [""]}
+    "PCS": {"code": "", "row_labels": ["", "EACH"]}
   },
   "classification": {"category_code": "", "subcategory_code": ""},
   "customs": {"required": true, "description": "", "usage": ""}

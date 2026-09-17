@@ -33,8 +33,8 @@ must match Tafnit's existing tax calculation. Zero-tax drafts without tax/gross
 readback are explicitly marked unverified; opening final confirmation always
 requires both mappings. Unmapped units/currencies stop
 before browser entry. Changed layouts require adapting and validating the
-adapter. The supplied foreign-USD profile is derived from the existing script;
-other mappings require local form verification.
+adapter. The supplied foreign-USD profile uses the observed form's totals and
+table labels; other mappings require local form verification.
 
 Dry-run never initializes desktop automation. Live entry requires a quotation
 review and typed confirmation, saves a draft, verifies rows/header/attachments/
@@ -48,7 +48,11 @@ an open dialog. Tafnit may show validation instead. Source descriptions stay
 unchanged; entry/readback use the same legacy-safe sign replacements as the
 Rosh flow. Catalogued rows retain and verify the reviewed description as well as
 the exact part number, because one SKU may identify several configurations.
-Read-only description fields fail safely through the inherited input helper.
+When a matching catalog locks a different description, the quotation text goes
+in line remarks. Verification reads that saved line through its line-number
+link and checks the catalog, supplier/manufacturer parts, description and exact
+quote remarks. Missing or altered remarks fail before further entry or handoff.
+Editable descriptions still receive the quotation text directly.
 Item URLs are optional reviewed data, falling back to an explicit
 supplier website only when the catalog has no URL. Empty optional website fields
 are omitted from canonical data so existing reviewed-data checkpoints still match.

@@ -256,6 +256,9 @@ class FakeDesktop:
     def item_rows(self):
         self.actions.append(("rows",))
         return self.rows
+    def read_item_details(self, line):
+        self.actions.append(("details", line))
+        return {}
     def begin_items(self, line): self.actions.append(("begin", line))
     def enter_item(self, item, line):
         self.actions.append(("enter", line))

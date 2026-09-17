@@ -129,10 +129,13 @@ the original quotation text remains in the review data, and the terminal shows
 the entry version when it differs.
 
 Quoted descriptions are preserved for catalogued items too, including variant
-details when several rows share a supplier part number. A catalog description
-cannot replace the reviewed configuration. If Tafnit prevents editing that
-description, the script stops for manual handling. Previously saved drafts with
-different catalog descriptions also stop on resume.
+details when several rows share a supplier part number. Editable descriptions
+receive the quoted text. When Tafnit locks a catalog description, the manufacturer
+part must match exactly; a differing description is retained and the quote text
+is stored in that line's remarks. Verification opens the saved line to check its
+catalog identity and exact quotation remarks, including after a page save and on
+resume. Missing, altered or unwritable remarks stop the run. Older drafts with
+different catalog descriptions and no matching quotation remarks still stop.
 
 Do not operate the mouse or keyboard during automation. The script attaches
 the PDF, enters rows with reviewed unit prices and discounts, optionally creates
@@ -196,10 +199,12 @@ to check currency changes and footer adjustments before filling blank templates.
 Customs reuse verifies the attachment's presence/title and this run's checkpoint,
 not the downloaded document's bytes; do not replace it between runs.
 
-Offline tests cover parsing, validation, simulated entry and recovery. **The new
-adapter has not been tested on a live Tafnit order**, and no new institution-wide
-vendor registry or procurement policy is assumed. Check the first saved draft
-carefully, including catalog-selected items and totals.
+Offline tests cover parsing, validation, simulated entry and recovery. An assisted
+live draft verified the foreign-USD field mappings and catalog-remarks approach.
+The updated automated catalog path has offline regression coverage, but has not
+yet completed an unattended live run. No institution-wide vendor registry or
+procurement policy is assumed. Check the first saved draft carefully, including
+catalog-selected items and totals.
 
 ## Options, files and privacy
 

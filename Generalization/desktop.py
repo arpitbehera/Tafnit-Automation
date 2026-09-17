@@ -11,6 +11,7 @@ import re
 import time
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
+from typing import Callable
 
 from RoshElectroptics.rosh_thorlabs_tafnit import (
     AutomationError, Checkpoint, TafnitDesktop, is_customs_attachment, normal,
@@ -30,11 +31,20 @@ def same_label(actual: str, expected: str) -> bool:
     return normal(actual).casefold() == normal(expected).casefold()
 
 
+def same_description(actual: str, expected: str) -> bool:
+    return re.sub(r"\s+", "", actual) == re.sub(r"\s+", "", expected)
+
+
+def quote_line_remarks(q: Quotation, item: Item, line: int) -> str:
+    return f"Quote {q.number}, line {line}: {item.part_number} - {item.tafnit_description}"
+
+
 def quote_attachment(row: str, number: str) -> bool:
     return bool(re.search(r"(?:^|\s)" + re.escape("Quote " + number) + r"(?:\s|$)", normal(row)))
 
 
-def verify_rows(q: Quotation, rows: list[list[str]], config: Config, *, complete: bool = True) -> int:
+def verify_rows(q: Quotation, rows: list[list[str]], config: Config, *, complete: bool = True,
+                read_catalog_details: Callable[[int], dict] | None = None) -> int:
     if len(rows) > len(q.items) or (complete and len(rows) != len(q.items)):
         raise AutomationError(f"Expected {len(q.items)} item rows; Tafnit has {len(rows)}.")
     for line, (item, cells) in enumerate(zip(q.items, rows), 1):
@@ -54,8 +64,22 @@ def verify_rows(q: Quotation, rows: list[list[str]], config: Config, *, complete
         if normal(cells[10]):
             if not item.part_number or normal(cells[7]) != item.part_number:
                 raise AutomationError(f"Line {line}: catalog part does not match the reviewed part number.")
-        if re.sub(r"\s+", "", cells[9]) != re.sub(r"\s+", "", item.tafnit_description):
-            raise AutomationError(f"Line {line}: description differs from the reviewed quotation.")
+        if not same_description(cells[9], item.tafnit_description):
+            # A locked catalog description is acceptable only with the exact
+            # quoted configuration read back from this saved line's remarks.
+            if not normal(cells[10]) or read_catalog_details is None:
+                raise AutomationError(f"Line {line}: description differs from the reviewed quotation.")
+            details = read_catalog_details(line)
+            expected = {"ln": str(line), "Cat": normal(cells[10]),
+                        "CatSpk": item.part_number, "Lbb3": item.part_number,
+                        "Remarks": quote_line_remarks(q, item, line)}
+            if (not isinstance(details, dict)
+                    or any(not isinstance(details.get(k), str) or normal(details[k]) != normal(v)
+                           for k, v in expected.items())
+                    or not isinstance(details.get("DescLarge"), str)
+                    or not normal(details["DescLarge"])
+                    or not same_description(details["DescLarge"], cells[9])):
+                raise AutomationError(f"Line {line}: saved catalog identity or quotation remarks differ from the reviewed quotation.")
     return len(rows)
 
 
@@ -137,6 +161,16 @@ class GeneralDesktop(TafnitDesktop):
         if visible:
             self.click_selector('#ArchiveUtilWin img[onclick*="CloseArchiveUtilWin"]')
 
+    def read_item_details(self, line: int) -> dict:
+        """Open a saved row through its line-number link; do not edit or save it."""
+        self.click("ITEMS")
+        self.click("PRITIM")
+        self.click_selector(f'tr[key="{line}"] [id="wbglngrid"]')
+        fields = ["ln", "Cat", "CatSpk", "Lbb3", "DescLarge", "Remarks"]
+        details = self.reader.read(f"Object.fromEntries({json.dumps(fields)}.map(k=>[k,document.getElementById(k)?.value]))")
+        self.click("PRITIM")
+        return details
+
     def enter_item(self, item: Item, line: int) -> None:
         self.click("ITEMS")
         self.click("PRITIM2")
@@ -152,8 +186,20 @@ class GeneralDesktop(TafnitDesktop):
         if catalog and not catalog.isdigit():
             raise AutomationError("Unexpected Tafnit catalog identifier.")
         # A supplier SKU can cover several configurations (length, connectors,
-        # etc.). Catalog identity alone cannot replace the reviewed description.
-        self.fill("DescLarge", item.tafnit_description)
+        # etc.). Preserve the quotation even when Tafnit locks the catalog text.
+        locked_description = None
+        if catalog:
+            if not item.part_number or self.value("Lbb3") != item.part_number:
+                raise AutomationError(f"Catalog manufacturer part does not match the reviewed part on line {line}.")
+            description = self.element('[id="DescLarge"]')
+            if description["readonly"]:
+                locked_description = description["value"]
+                if not normal(locked_description):
+                    raise AutomationError(f"Line {line} has an empty locked catalog description.")
+                if not same_description(locked_description, item.tafnit_description):
+                    self.fill("Remarks", quote_line_remarks(self.quote, item, line))
+        if locked_description is None:
+            self.fill("DescLarge", item.tafnit_description)
         if not catalog:
             self.select("KitlugFLD0A", self.config.classification["category_code"])
             self.select("KitlugFLD0B", self.config.classification["subcategory_code"])

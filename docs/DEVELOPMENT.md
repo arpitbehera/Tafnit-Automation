@@ -48,6 +48,12 @@ local and participates in the resume fingerprint when nonempty.
 The same regression suite checks that catalog lookup preserves quoted
 configuration details, including different descriptions sharing a supplier SKU.
 
+`tests/test_generalization_catalog.py` covers locked catalog descriptions with
+quotation remarks, saved-line identity, post-save remarks loss, and resume after
+a row save without duplicate entry. It also exercises the observed USD profile
+against synthetic taxable totals and mixed blank/`EACH` unit labels. The tests
+remain offline; they do not retry or submit any existing draft.
+
 Use `uv lock` after editing dependencies, then `uv sync --locked`. Keep real
 quotation data and local configuration out of fixtures and commit history; see
 [privacy guidance](PRIVACY.md).

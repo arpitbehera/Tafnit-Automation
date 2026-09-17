@@ -19,7 +19,7 @@ preserve leading zeros. This schema is separate from the Rosh profile.
 | `customs.description`, `customs.usage` | Actual goods description and intended use; mandatory if customs is required |
 
 The example's request type `4`, purpose `1`, currency code `1`/USD and
-`NetoDollar` field come from the observed foreign-purchase flow. They are not
+total fields come from the observed foreign-purchase flow. They are not
 universal Weizmann procurement rules. The legacy classification `1`/`7` means
 scientific equipment/laboratory instruments in that observed form; use it only
 when correct for the items. Classification is intentionally blank in this
@@ -34,31 +34,42 @@ Each quotation currency needs a `currencies` entry with these exact keys:
 ```json
 "USD": {
   "code": "1",
-  "row_labels": ["$ ארהב", "USD"],
-  "net_total_field": "NetoDollar",
-  "tax_total_field": "",
-  "gross_total_field": ""
+  "row_labels": ["$ ארהב", "בהרא $", "USD"],
+  "net_total_field": "BrutoaDollar",
+  "tax_total_field": "MamDollar",
+  "gross_total_field": "NetoDollar"
 }
 ```
 
 `code` is written to header `KM` and line `Coin`. `row_labels` lists exact
 display strings for that currency in item-table column 5; matching ignores
 case and repeated whitespace. A dollar symbol alone is ambiguous, so configure
-only the labels verified on your form for the selected code.
+only the labels verified on your form for the selected code. The observed
+legacy item table exposes the USD label as `בהרא $` in its DOM text; the header
+shows `$ ארהב`. These are explicit aliases, not a general text-reversal rule.
 
 The total fields must be DOM IDs whose `.value` contains numeric amounts in
 **the quotation currency**, not converted amounts or formatted HTML. `net`
 means the pre-tax sum from entered item prices after entered discounts,
 displayed to three decimals.
 `tax` is the actual tax amount, and `gross` is the amount payable including tax.
-Do not reuse `NetoDollar` for a non-USD quotation without verifying its semantics.
+On the inspected USD form, `BrutoaDollar` is the subtotal after discounts,
+`MamDollar` is the VAT amount, and `NetoDollar` is the total **including VAT**.
+Despite its name, `NetoDollar` is not the pre-tax subtotal. Budget-reservation
+fields, which may include an additional reserve, are not supplier totals.
+Do not reuse these USD fields for another currency without verifying semantics.
 
-Tax/gross fields are blank in the example because they have not been inspected
-for the general workflow. For a zero-tax quotation this allows a saved draft
-with **UNVERIFIED** tax/gross totals, which you must inspect manually. For
-nonzero quoted tax, or to use `--open-final-confirmation`, configure both before
-starting the run. Tafnit's existing tax calculation must match the quotation;
-the script does not set a VAT rate, tax exemption or exchange rate.
+The example now includes all three observed USD total fields. Existing local
+profiles are not rewritten: for new requests, replace the old net mapping to
+`NetoDollar` with `BrutoaDollar` and add tax/gross mappings as above after checking
+your form. Do not change an active run's profile and attempt to resume it;
+its checkpoint binds the original profile. Finish that draft manually.
+
+A custom profile may leave tax/gross mappings blank for a zero-tax quotation;
+those totals are then **UNVERIFIED** and require manual inspection. Nonzero tax
+or `--open-final-confirmation` requires both mappings before entry. Tafnit's
+existing tax calculation must match the quotation; the script does not set a
+VAT rate, tax exemption or exchange rate.
 
 ## Units
 
@@ -68,12 +79,14 @@ quotation `unit`, map its code and exact item-table unit labels:
 ```json
 "unit_field": "",
 "units": {
-  "PCS": {"code": "", "row_labels": [""]}
+  "PCS": {"code": "", "row_labels": ["", "EACH"]}
 }
 ```
 
-The supplied mapping represents the legacy form's observed default pieces unit
-with a blank unit cell. Verify that default for your form. With no unit control
+The supplied mapping represents the legacy form's observed default pieces unit:
+uncatalogued rows have a blank unit cell and catalogued pieces display `EACH`.
+It does not authorize treating boxes or packs as single pieces; verify the
+catalog's packaging and quantity basis against the quotation. With no unit control
 mapped, only one default unit is permitted, and its code must be blank. To
 support BOX, HOUR or other units, inspect the real unit control, set its DOM ID
 in `unit_field`, and add each verified code/label. Dropdowns use their option
@@ -101,8 +114,8 @@ compare their values with the form's visible labels. A missing control, a
 different 12-column item table, special tax treatment or a different purchase
 process needs an adapter change; adding a plausible ID is not validation.
 Validate a synthetic or carefully inspected draft before relying on a new
-profile. No authenticated page, live order or registry was accessed to generate
-these example mappings.
+profile. The example's USD totals and table labels were checked on an assisted
+live foreign-purchase draft; other forms and currencies need their own checks.
 
 Supplier details do not belong in this reusable institution profile: the CLI
 asks for them for each new quotation and retains them in its private checkpoint

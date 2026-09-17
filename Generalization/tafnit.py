@@ -166,6 +166,7 @@ def main(argv: list[str] | None = None, *, ask: Callable[[str], str] | None = No
         print(f"Website fallback: {supplier.website or '(none; each item needs an item/catalog website)'}")
         print(f"Funding note: {config.budget_note}")
         print(f"Request type: {config.request_type_code}; purpose: {config.purpose_code}; classification: {config.classification}")
+        print("Matching catalog items with locked descriptions retain the quoted text in line remarks, checked after saving.")
         print(f"Customs declaration: {'required' if config.customs['required'] else 'not requested'}")
         missing_totals = unverified_totals(quote, config)
         if missing_totals:
