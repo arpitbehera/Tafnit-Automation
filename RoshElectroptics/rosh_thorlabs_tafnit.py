@@ -19,7 +19,7 @@ import sys
 import time
 from dataclasses import asdict, dataclass, fields
 from datetime import datetime
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_HALF_EVEN, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote as url_quote
@@ -172,8 +172,10 @@ def parse_quote_text(text: str) -> Quote:
         body = re.sub(r"© Created in Priority[^\n]*", "", body)
         bodies.append(body)
     table = "\n".join(bodies).replace("\r", "")
+    # Supported Thorlabs SKUs are uppercase. Wrapped descriptions such as
+    # "8-\n32 Tap" must not be mistaken for the start of another item.
     starts = list(re.finditer(
-        r"(?m)^\s*(\d+) +([A-Z][A-Za-z0-9./_-]*(?: +\([A-Z ]+\))?)(?=\s|$)", table))
+        r"(?m)^\s*(\d+) +([A-Z][A-Z0-9./_-]*(?: +\([A-Z ]+\))?)(?=\s|$)", table))
     if not starts:
         raise QuoteError("No item rows found. Scans and other quotation layouts are unsupported.")
     amounts_pattern = re.compile(
@@ -200,7 +202,11 @@ def parse_quote_text(text: str) -> Quote:
         if not description or item.quantity <= 0 or item.unit_price < 0 or not 0 <= item.discount <= 100:
             raise QuoteError(f"Invalid description, quantity, price, or discount on line {line}.")
         discounted_exact = item.unit_price * (1 - item.discount / 100)
-        if discounted_exact.quantize(CENT, rounding=ROUND_HALF_UP) != number(discounted):
+        # Priority's displayed unit price can use half-even at an exact tie.
+        # Enter original prices and discounts; extended amounts stay strict.
+        if number(discounted) not in {
+                discounted_exact.quantize(CENT, rounding=ROUND_HALF_UP),
+                discounted_exact.quantize(CENT, rounding=ROUND_HALF_EVEN)}:
             raise QuoteError(f"Discounted unit price mismatch on line {line}.")
         if item.exact_amount.quantize(CENT, rounding=ROUND_HALF_UP) != item.extended_price:
             raise QuoteError(f"Extended price mismatch on line {line}.")

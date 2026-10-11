@@ -58,6 +58,37 @@ class ParserTests(unittest.TestCase):
         with self.assertRaisesRegex(self.module().QuoteError, "line 1"):
             self.m.parse_quote_text(QUOTE.replace("45.05", "45.06"))
 
+    def test_wrapped_thread_description_is_not_an_item_row(self):
+        text = HEADER + '''1 DEMO-MOUNT
+Translation Mount, 8-
+32 Tap
+2.00 PCS USD 10.01 10.00% 9.01 18.02
+TOTAL USD 18.02'''
+        q = self.module().parse_quote_text(text)
+        self.assertEqual(len(q.items), 1)
+        self.assertEqual(q.items[0].part_number, "DEMO-MOUNT")
+        self.assertEqual(q.items[0].description, "Translation Mount, 8- 32 Tap")
+
+    def test_discounted_unit_price_accepts_half_even_tie(self):
+        text = HEADER + '''1 DEMO-POST
+Example post
+2.00 PCS USD 2.25 10.00% 2.02 4.05
+TOTAL USD 4.05'''
+        q = self.module().parse_quote_text(text)
+        self.assertEqual(q.items[0].unit_price, Decimal("2.25"))
+        self.assertEqual(q.items[0].discount, Decimal("10"))
+        self.assertEqual(q.exact_total, Decimal("4.05"))
+
+    def test_wrong_discounted_unit_price_still_rejected(self):
+        for price, discounted, total in [("2.25", "2.01", "4.05"),
+                                         ("2.25", "2.04", "4.05"),
+                                         ("3.27", "2.95", "5.89")]:
+            with self.subTest(price=price, discounted=discounted):
+                text = HEADER + (f"1 DEMO-POST\nExample post\n"
+                    f"2.00 PCS USD {price} 10.00% {discounted} {total}\nTOTAL USD {total}")
+                with self.assertRaisesRegex(self.module().QuoteError, "Discounted unit price"):
+                    self.m.parse_quote_text(text)
+
     def test_bad_total_is_rejected(self):
         with self.assertRaisesRegex(self.module().QuoteError, "total"):
             self.m.parse_quote_text(QUOTE.replace("47.08", "350.00"))

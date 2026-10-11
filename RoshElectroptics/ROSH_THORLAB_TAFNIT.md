@@ -149,7 +149,11 @@ These contain private order information; keep them out of public repositories.
 
 Tafnit may display three decimal places while the PDF rounds each line to two.
 The script checks both totals using decimal arithmetic and the original prices;
-it does not enter the already discounted unit price a second time.
+it does not enter the already discounted unit price a second time. Displayed
+discounted unit prices accept half-up or half-even rounding at exact ties;
+line amounts retain the strict half-up check. Item starts require uppercase
+Thorlabs part numbers so wrapped descriptions such as `8-` / `32 Tap` are
+not mistaken for additional rows.
 
 When the terminal reports `STOPPED after requesting final confirmation`, inspect
 the request and Tafnit's dialog, then confirm it yourself. If Tafnit displays a
