@@ -16,9 +16,10 @@ LABEL = "דרישה לרכש"
 HOST = "tafnit.example.edu"
 
 
-def window(handle, title):
-    return SimpleNamespace(_hWnd=handle, title=title + " - Google Chrome", left=0,
-                           activate=Mock(), maximize=Mock())
+def window(handle, title, *, left=0, top=0, width=2560, height=1440, minimized=False):
+    return SimpleNamespace(_hWnd=handle, title=title + " - Google Chrome",
+                           left=left, top=top, width=width, height=height,
+                           isMinimized=minimized, activate=Mock(), maximize=Mock())
 
 
 def page(*, request=None, status=None, host=HOST, dpr=1):
@@ -56,7 +57,7 @@ class StartupTests(unittest.TestCase):
             patcher.start()
             self.addCleanup(patcher.stop)
 
-    def install_navigation(self, *, popup=True):
+    def install_navigation(self, *, popup=True, controls=None):
         def click(selector):
             self.clicked.append(selector)
             if selector == '[id="purchase"]':
@@ -66,8 +67,12 @@ class StartupTests(unittest.TestCase):
                     self.home.title = self.request.title
                     self.pages[1] = page(request="", status="0")
 
+        label_patcher = (patch.object(app.TafnitDesktop, "visible_controls", return_value=controls)
+                         if controls is not None else
+                         patch.object(app.TafnitDesktop, "controls_with_text",
+                                      side_effect=lambda label: self.labels.get(label, [])))
         for patcher in (
-            patch.object(app.TafnitDesktop, "controls_with_text", side_effect=lambda label: self.labels.get(label, [])),
+            label_patcher,
             patch.object(app.TafnitDesktop, "click_selector", side_effect=click),
         ):
             patcher.start()
@@ -145,6 +150,64 @@ class StartupTests(unittest.TestCase):
         self.install_navigation()
         self.home.title = "Example Institute - Google Chrome"
         self.assertEqual(self.create().main._hWnd, 2)
+
+    def test_institution_home_on_display_one_allows_other_chrome_windows(self):
+        # Exercise real label matching together with startup for both adapters.
+        self.install_navigation(controls=[
+            {"selector": '[id="purchase"]', "text": "שכרל\u00a0השירד"},
+            {"selector": '[id="foreign"]', "text": "טנרטניא ל\"וח שכר תשירד"},
+        ])
+        self.home.title = "Example Institute - Google Chrome"
+        # A maximized primary window has negative borders; another monitor
+        # can overlap display 1 by a few pixels, as in the observed desktop.
+        self.home.left, self.home.top = -8, -8
+        self.home.width, self.home.height = 2576, 1416
+        others = [window(3, "Other page", left=2558, top=245, width=2569, height=1162),
+                  window(4, "Another page", left=-2568),
+                  window(5, "Upper display", top=-1440),
+                  window(6, "Minimized page", minimized=True)]
+        for cls in (app.TafnitDesktop, GeneralDesktop):
+            with self.subTest(adapter=cls.__name__):
+                self.windows = [self.home, *others]
+                self.clicked.clear()
+                self.assertEqual(self.create(cls).main._hWnd, 2)
+                self.assertEqual(self.clicked, ['[id="purchase"]'])
+
+    def test_display_one_fallback_still_requires_configured_host(self):
+        self.install_navigation()
+        self.home.title = "Unrelated page - Google Chrome"
+        self.windows.append(window(3, "Other page", left=2560))
+        self.pages[1] = page(host="other.example")
+        for cls in (app.TafnitDesktop, GeneralDesktop):
+            with self.subTest(adapter=cls.__name__):
+                with self.assertRaisesRegex(app.AutomationError, "configured Tafnit host"):
+                    self.create(cls)
+                self.assertEqual(self.clicked, [])
+
+    def test_multiple_unidentified_primary_windows_are_rejected(self):
+        self.home.title = "Example Institute - Google Chrome"
+        self.windows.append(window(3, "Other page"))
+        with self.assertRaises(app.AutomationError):
+            self.create()
+        self.reader.assert_not_called()
+
+    def test_unidentified_windows_on_other_displays_are_not_read(self):
+        self.windows = [window(3, "Other page", left=2560),
+                        window(4, "Another page", left=-2560)]
+        with self.assertRaises(app.AutomationError):
+            self.create()
+        self.reader.assert_not_called()
+
+    def test_resume_never_uses_primary_display_home_fallback(self):
+        self.install_navigation()
+        self.home.title = "Example Institute - Google Chrome"
+        self.windows.append(window(3, "Other page", left=2560))
+        for cls in (app.TafnitDesktop, GeneralDesktop):
+            with self.subTest(adapter=cls.__name__):
+                with self.assertRaisesRegex(app.AutomationError, "original"):
+                    self.create(cls, allow_open_request=False)
+                self.assertEqual(self.clicked, [])
+        self.reader.assert_not_called()
 
     def test_ambiguous_home_windows_are_rejected_before_reading(self):
         self.windows.append(window(3, "Tafnit"))
@@ -257,6 +320,27 @@ class MenuLabelTests(unittest.TestCase):
         controls = [{"selector": "html > body > div", "text": LABEL},
                     {"selector": "html > body > div > a", "text": LABEL}]
         self.assertEqual(self.choices(controls), ["html > body > div > a"])
+
+    def test_visual_order_label_from_live_menu_is_matched_exactly(self):
+        controls = [{"selector": str(i), "text": text} for i, text in enumerate([
+            "טנרטניא ל\"וח שכר תשירד", "ןיא דיירט שכרל השירד",
+            "שכר תנמזה", "תוריש שכרל השירד", "שכרל השירד רותיא",
+            "\u200fשכרל\u00a0השירד\u200e",
+        ])]
+        self.assertEqual(self.choices(controls), ["5"])
+
+    def test_nested_logical_and_visual_order_labels_are_one_choice(self):
+        controls = [{"selector": "html > body > div", "text": LABEL},
+                    {"selector": "html > body > div > a", "text": "שכרל השירד"}]
+        self.assertEqual(self.choices(controls), ["html > body > div > a"])
+
+    def test_separate_logical_and_visual_labels_are_ambiguous(self):
+        ui = object.__new__(app.TafnitDesktop)
+        controls = [{"selector": "a:nth-child(1)", "text": LABEL},
+                    {"selector": "a:nth-child(2)", "text": "שכרל השירד"}]
+        ui.reader = SimpleNamespace(read=lambda expression: controls)
+        with self.assertRaisesRegex(app.AutomationError, "ambiguous"):
+            ui.purchase_request_control()
 
     def test_separate_identical_labels_remain_ambiguous(self):
         controls = [{"selector": "a:nth-child(1)", "text": LABEL},

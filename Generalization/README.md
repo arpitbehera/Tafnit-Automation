@@ -114,8 +114,12 @@ compare them yourself. Input files cannot occupy generated output paths.
 Log in to Tafnit in Chrome and leave its **home screen** as the active tab on
 display 1. Keep one eligible Tafnit home window or one purchase-request window;
 multiple purchase-request windows stop startup.
+For institution-only home titles, keep that window as the only non-minimized
+Chrome window on display 1; other displays may contain other Chrome windows.
+The selected window must still match the configured Tafnit hostname.
 The script follows **עברית → יזם → עברית → קליטה** and opens the exact
-**דרישה לרכש** (Purchase Request) menu option. Allow Tafnit popups in Chrome.
+**דרישה לרכש** (Purchase Request) menu option, including when Tafnit exposes
+its Hebrew text in reversed visual character order. Allow Tafnit popups in Chrome.
 An already-open **new blank** purchase request is also supported and takes
 precedence over the home screen. The form must have the configured institution
 defaults. See [browser setup](../RoshElectroptics/ROSH_THORLAB_TAFNIT.md#browser-setup)
@@ -242,9 +246,11 @@ not the downloaded document's bytes; do not replace it between runs.
 Offline tests cover parsing, validation, simulated entry and recovery. An assisted
 live draft verified the foreign-USD field mappings and catalog-remarks approach.
 The updated automated catalog path has offline regression coverage, but has not
-yet completed an unattended live run. Home-screen startup is tested with
-simulated windows/DOM and has not been verified against a live logged-in home
-screen. No institution-wide vendor registry or procurement policy is assumed.
+yet completed an unattended live run. An assisted live Rosh run exposed shared
+startup issues with institution-only window titles and reversed Hebrew menu text.
+Both fixes are covered for Generalization with simulated windows/DOM; the revised
+startup has not been rerun live. No institution-wide vendor registry or procurement
+policy is assumed.
 Check the first saved draft carefully, including
 catalog-selected items and totals.
 

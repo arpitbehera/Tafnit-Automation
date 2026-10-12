@@ -415,10 +415,14 @@ class TafnitDesktop:
                 raise AutomationError("To resume, reopen the original purchase request; a new request will not be opened.")
             windows = [w for w in chrome if any(label in w.title.casefold()
                        for label in ("tafnit", "תפנית", config.tafnit_host.casefold()))]
-            # Some installations use only the institution name as the title.
-            # A lone Chrome window is usable only after verifying its host.
-            if not windows and len(chrome) == 1:
-                windows = chrome
+            # Institution-only titles cannot identify Tafnit. Use a unique
+            # non-minimized Chrome window on display 1, then verify its host.
+            # Window centers exclude other monitors despite overlapping borders.
+            if not windows:
+                width, height = p.size()
+                windows = [w for w in chrome if not w.isMinimized
+                           and 0 <= w.left + w.width / 2 < width
+                           and 0 <= w.top + w.height / 2 < height]
         if len(windows) != 1:
             raise AutomationError("Keep exactly one Tafnit home screen or purchase-request window open in Chrome on display 1.")
         self.bind_window(windows[0])
@@ -479,8 +483,13 @@ class TafnitDesktop:
     def controls_with_text(self, text: str) -> list[str]:
         controls = self.visible_controls('a,button,input[type="button"],input[type="submit"],'
                                          '[role="button"],[role="menuitem"],[onclick]')
+        labels = {text}
+        if re.search(r"[\u0590-\u05ff]", text):
+            # Legacy Tafnit menus can expose Hebrew in visual character order.
+            # Match both in one pass so mixed-order duplicates remain ambiguous.
+            labels.add(text[::-1])
         matches = [c["selector"] for c in controls
-                   if normal(re.sub(r"[\u200e\u200f\u202a-\u202e\u2066-\u2069]", "", c["text"])) == text]
+                   if normal(re.sub(r"[\u200e\u200f\u202a-\u202e\u2066-\u2069]", "", c["text"])) in labels]
         # A link nested inside a clickable menu row represents one choice.
         return [s for s in matches if not any(other.startswith(s + " > ") for other in matches)]
 

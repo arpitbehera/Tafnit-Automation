@@ -17,8 +17,9 @@ amounts, page continuation, missing/incorrect rows, currencies, item identity,
 configuration validation, interruption recovery, and the final handoff.
 
 `tests/test_tafnit_startup.py` covers shared home-screen startup, exact Hebrew
-menu matching, the `kalirkosh.py` menu sequence, popup and same-window navigation,
-host/display checks,
+menu matching in normal and reversed visual character order, institution-only
+home titles with other Chrome windows on secondary displays, the `kalirkosh.py`
+menu sequence, popup and same-window navigation, host/display checks,
 ambiguous controls, and creation being disabled during resume. Startup clicks
 **דרישה לרכש** once; a timeout must never retry that click automatically.
 
@@ -38,7 +39,9 @@ Shared startup belongs to `TafnitDesktop`; `GeneralDesktop` inherits it. The
 four home-menu templates implement **עברית → יזם → עברית → קליטה**, followed
 by an exact DOM-label check for **דרישה לרכש**. Keep both CLI constructors
 passing `allow_open_request=not args.resume`, and preserve compatibility with
-an already-open request. Live home-screen behavior remains unverified.
+an already-open request. An assisted live Rosh run exercised the menu and reached
+the final handoff after startup workarounds. Regression tests cover the resulting
+shared startup fixes for both adapters; the revised startup has not been rerun live.
 
 Preserve the final-confirmation boundary when modifying the workflow:
 checkpoint before opening the dialog, never approve it, never issue browser

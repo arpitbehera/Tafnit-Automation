@@ -53,7 +53,8 @@ tax amount causes a stop. Use a verified generalized profile for taxed quotes.
    Allow Tafnit popups in Chrome. An already-open **new, blank purchase-request
    window** is also supported and takes precedence over the home screen.
    If the home-window title contains only your institution name, keep it as the
-   only Chrome window so the script can select it and verify its hostname.
+   only non-minimized Chrome window on display 1. Other Chrome windows may stay
+   on other displays; the script verifies the selected window's hostname.
 2. Use 2560×1440 display resolution, 100% Windows scaling, and 100% Chrome zoom.
    The script checks this setup because the bundled image crops depend on it.
 3. Check that research group, requester, department, delivery location, and
@@ -74,7 +75,8 @@ login and does not collect passwords, cookies, or authentication tokens.
 
 The menu sequence and its four bundled image crops come from `kalirkosh.py`.
 Once the menu is expanded, the script reads its controls to require one exact
-**דרישה לרכש** label. A missing template or missing/ambiguous label stops entry.
+**דרישה לרכש** label, accepting both normal Hebrew text and Tafnit's reversed
+visual-order text. A missing template or missing/ambiguous label stops entry.
 It clicks that option once, waits for its window (or navigation in the same
 window), and checks the purchase-request title, configured host and new blank
 form before entering details. It does not log in for you.

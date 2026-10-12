@@ -42,7 +42,7 @@ entered items or saved a request.
 | --- | --- |
 | Missing or invalid local config | Use the [Rosh profile](CONFIGURATION.md) or [Generalization profile](../Generalization/CONFIGURATION.md) for the matching script. The schemas are different; blank examples cannot run live. |
 | Desktop entry needs Windows Python | Run from Windows PowerShell with the Windows environment. `uv run python -c "import os; print(os.name)"` must print `nt`. WSL Python is for offline validation. |
-| Cannot select a startup window | Activate the intended Tafnit tab on display 1. Keep one request window, or one home window if no request is open. If its title shows only the institution name, use a single Chrome window. |
+| Cannot select a startup window | Activate the intended Tafnit tab on display 1. Keep one request window, or one home window if no request is open. If its title shows only the institution name, keep it as the only non-minimized Chrome window on display 1; other Chrome windows may remain on other displays. The configured hostname is still required. |
 | Home-screen menu template or exact option missing/ambiguous | Check display/zoom and the menu state. Follow the startup recovery steps above; similar menu names are not selected. |
 | New request did not open | Check Chrome popup blocking and any Tafnit message. Inspect for an already-open request before opening one manually; `--resume` requires the original form and never retries creation. |
 | Wrong research group/requester/location | Set the intended defaults in the blank Tafnit form and match the local profile. |
@@ -86,8 +86,8 @@ bypass this protection on an already submitted order.
 
 The workflow was derived from an observed completed requisition. PDF parsing,
 financial checks, resume behavior, and the confirmation boundary have offline
-regression tests. Browser reading, filling, selection, and clicking were tested
-on a local form. The extracted public version has not been exercised by creating
-another live order; a changed Tafnit form can require manual intervention.
-Home-screen startup is covered by simulated window/DOM tests; it has not yet
-been verified against a live logged-in home screen.
+regression tests. An assisted live Rosh run saved and verified a request through
+the final-confirmation handoff, after workarounds for an institution-only window
+title and reversed Hebrew menu text. The shared startup fixes for these cases
+are covered by simulated window/DOM tests in both workflows; the revised startup
+has not yet been rerun live. A changed Tafnit form can require manual intervention.
